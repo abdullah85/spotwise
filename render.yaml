@@ -25,3 +25,5 @@ services:
         sync: false
       - key: SPOTWISE_LLM_MODEL
         sync: false
+      - key: SPOTWISE_LLM_API_KEY  # only for hosted model servers; never committed
+        sync: false

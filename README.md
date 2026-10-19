@@ -34,7 +34,19 @@ plus templates). This is also what makes small, self-hosted open models practica
 
 A site owner who embeds price research should control it: no per-query fees, swappable models, and
 no lock-in to one vendor's API. Any OpenAI-compatible server works
-(`SPOTWISE_LLM_URL`, `SPOTWISE_LLM_MODEL`). Model licences are the operator's responsibility to check.
+(`SPOTWISE_LLM_URL`, `SPOTWISE_LLM_MODEL`, and `SPOTWISE_LLM_API_KEY` for hosted servers that need
+one). Model licences are the operator's responsibility to check.
+
+Instructions are sent in the user message rather than a system message, so models without a system
+role, such as Gemma, work. For example, a local Gemma via Ollama:
+
+```bash
+ollama pull gemma3:4b
+export SPOTWISE_LLM_URL=http://localhost:11434/v1 SPOTWISE_LLM_MODEL=gemma3:4b
+```
+
+On Render, set the same variables (plus `SPOTWISE_LLM_API_KEY`) in the dashboard, pointing at a
+hosted OpenAI-compatible endpoint. `/api/health` reports `model_configured`.
 
 ## Run it
 
@@ -117,7 +129,10 @@ the future. Paper trading only; no real money moves.
 Repository created and built within the challenge window (12-18 Oct 2026; deadline 11:59 PM PDT
 18 Oct = 12:29 PM IST 19 Oct).
 
-Commits made after the deadline: none.
+Commits made after the deadline (19 Oct 2026, after the entry was submitted):
+
+- Optional `SPOTWISE_LLM_API_KEY` for hosted model servers, and model instructions sent in the user
+  message so Gemma works. The submitted entry ran without a model on the public demo.
 
 ## Licence
 

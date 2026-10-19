@@ -6,8 +6,11 @@ to template text. With no model configured, the app still works end to end.
 Model server (optional): any OpenAI-compatible /v1/chat/completions endpoint
 (llama.cpp server, vLLM, Ollama...). Configure with:
     SPOTWISE_LLM_URL=http://localhost:8080/v1   SPOTWISE_LLM_MODEL=<name>
+    SPOTWISE_LLM_API_KEY=<key>   (optional; sent as a Bearer token for hosted servers)
 Constrained JSON output is requested via `response_format` (json_schema).
 Support varies by server and version - verify against yours.
+Instructions go in the user message, not a system message: some models
+(e.g. Gemma) have no system role and some hosts reject one for them.
 """
 
 from __future__ import annotations
@@ -23,8 +26,21 @@ from .backtest import BacktestParams
 
 LLM_URL = os.environ.get("SPOTWISE_LLM_URL", "").rstrip("/")
 LLM_MODEL = os.environ.get("SPOTWISE_LLM_MODEL", "")
+LLM_API_KEY = os.environ.get("SPOTWISE_LLM_API_KEY", "")
 
 CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "AUD", "BRL", "CAD", "CHF", "CNY", "HKD", "JPY", "SGD"]
+
+
+# ---------- model server helpers ----------
+
+def auth_headers(api_key: str) -> dict:
+    """Bearer header for hosted servers; none for a local server without a key."""
+    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+
+def user_messages(instructions: str, content: str) -> list[dict]:
+    """One user message carrying the instructions, so models without a system role work."""
+    return [{"role": "user", "content": f"{instructions}\n\n{content}"}]
 
 
 # ---------- 1. text -> structured request ----------
@@ -75,24 +91,21 @@ def llm_parse(text: str, last_date: date) -> BacktestParams | None:
     body = {
         "model": LLM_MODEL or "default",
         "temperature": 0,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Convert the user's request into JSON for a gold/silver/platinum backtest. "
-                    f"Today's latest data date is {last_date.isoformat()}. "
-                    "Output only JSON. Omit fields the user did not mention. Do no arithmetic."
-                ),
-            },
-            {"role": "user", "content": text},
-        ],
+        "messages": user_messages(
+            "Convert the user's request into JSON for a gold/silver/platinum backtest. "
+            f"Today's latest data date is {last_date.isoformat()}. "
+            "Output only JSON. Omit fields the user did not mention. Do no arithmetic.",
+            f"Request: {text}",
+        ),
         "response_format": {
             "type": "json_schema",
             "json_schema": {"name": "backtest_request", "schema": schema},
         },
     }
     try:
-        r = httpx.post(f"{LLM_URL}/chat/completions", json=body, timeout=60)
+        r = httpx.post(
+            f"{LLM_URL}/chat/completions", json=body, headers=auth_headers(LLM_API_KEY), timeout=60
+        )
         r.raise_for_status()
         raw = json.loads(r.json()["choices"][0]["message"]["content"])
         return BacktestParams(**raw)  # pydantic enforces bounds: never trust the model
@@ -181,20 +194,17 @@ def llm_explain(facts: dict) -> str | None:
     body = {
         "model": LLM_MODEL or "default",
         "temperature": 0.2,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Explain this backtest result in 3-4 plain sentences to a long-term saver. "
-                    "Use ONLY the numbers in the facts, copied exactly. Do not calculate, "
-                    "round, or invent any figure. Do not give financial advice."
-                ),
-            },
-            {"role": "user", "content": json.dumps(facts)},
-        ],
+        "messages": user_messages(
+            "Explain this backtest result in 3-4 plain sentences to a long-term saver. "
+            "Use ONLY the numbers in the facts, copied exactly. Do not calculate, "
+            "round, or invent any figure. Do not give financial advice.",
+            f"Facts: {json.dumps(facts)}",
+        ),
     }
     try:
-        r = httpx.post(f"{LLM_URL}/chat/completions", json=body, timeout=60)
+        r = httpx.post(
+            f"{LLM_URL}/chat/completions", json=body, headers=auth_headers(LLM_API_KEY), timeout=60
+        )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
     except Exception:
