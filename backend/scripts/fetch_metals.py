@@ -8,11 +8,12 @@ Run this on YOUR machine (the key must never be committed):
     python scripts/fetch_metals.py fetch --start 2021-10-18 --end 2026-10-16 \
         --chunk-days 30 --max-calls 60 --currencies INR,USD,EUR,GBP,AED
 
-ASSUMPTIONS (UNVERIFIED - confirm with `probe` and the metals.dev docs):
+API (per metals.dev docs, https://metals.dev/docs - confirm with `probe`):
   * endpoint  GET {BASE}/timeseries?api_key=..&start_date=..&end_date=..
   * response  {"rates": {"YYYY-MM-DD": {"metals": {"gold": usd_toz, ...},
                                          "currencies": {"INR": usd_per_unit, ...}}}}
-  * the maximum date range per call is unknown; --chunk-days sets it.
+  * at most 30 days per call (error 2105 otherwise); --chunk-days is capped at that.
+  * errors    {"status": "failure", "error_code": .., "error_message": ..}
 If the shape differs, edit `parse_chunk()` only; everything else is generic.
 
 Call budget: the Free plan allows 100 calls a month. Every call is counted in
@@ -42,6 +43,7 @@ DATA = Path(__file__).resolve().parents[1] / "data"
 RAW = DATA / "raw"
 STATE = DATA / "fetch_state.json"
 METALS = ("gold", "silver", "platinum")
+MAX_RANGE_DAYS = 30  # metals.dev timeseries limit per call, inclusive of both ends
 
 
 def state() -> dict:
@@ -61,6 +63,9 @@ def api_key() -> str:
 
 
 def call(start: date, end: date, max_calls: int) -> dict:
+    days = (end - start).days + 1
+    if not 1 <= days <= MAX_RANGE_DAYS:
+        sys.exit(f"Range {start}..{end} is {days} days; metals.dev allows 1-{MAX_RANGE_DAYS}.")
     s = state()
     if s["calls"] >= max_calls:
         sys.exit(f"Call limit reached ({s['calls']}/{max_calls}). Stopping.")
@@ -68,8 +73,16 @@ def call(start: date, end: date, max_calls: int) -> dict:
     r = httpx.get(f"{BASE}/timeseries", params=params, timeout=60)
     s["calls"] += 1  # count even on failure: the provider counts it
     save_state(s)
-    r.raise_for_status()
-    return r.json()
+    try:
+        payload = r.json()
+    except ValueError:
+        payload = {}
+    if r.status_code != 200 or payload.get("status") == "failure":
+        # Never print r.url or the httpx error: both contain the API key.
+        sys.exit(f"metals.dev error (HTTP {r.status_code}) for {start}..{end}: "
+                 f"code {payload.get('error_code', '?')}: {payload.get('error_message', r.text[:200])}"
+                 f"  [calls used: {s['calls']}]")
+    return payload
 
 
 def parse_chunk(payload: dict, currencies: set[str]):
@@ -90,7 +103,7 @@ def parse_chunk(payload: dict, currencies: set[str]):
 
 def probe(args) -> None:
     end = date.today() - timedelta(days=1)
-    start = end - timedelta(days=args.days)
+    start = end - timedelta(days=args.days - 1)
     payload = call(start, end, args.max_calls)
     RAW.mkdir(parents=True, exist_ok=True)
     out = RAW / "probe.json"
@@ -106,6 +119,8 @@ def probe(args) -> None:
 
 def fetch(args) -> None:
     start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    if not 1 <= args.chunk_days <= MAX_RANGE_DAYS:
+        sys.exit(f"--chunk-days must be 1-{MAX_RANGE_DAYS} (metals.dev limit per call).")
     currencies = {c.strip().upper() for c in args.currencies.split(",") if c.strip()}
     RAW.mkdir(parents=True, exist_ok=True)
     cur = start
@@ -148,7 +163,8 @@ def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("probe")
-    a.add_argument("--days", type=int, default=400, help="range to request in the probe call")
+    a.add_argument("--days", type=int, default=MAX_RANGE_DAYS,
+                   help=f"days to request in the probe call (max {MAX_RANGE_DAYS})")
     a.add_argument("--max-calls", type=int, default=90)
     b = sub.add_parser("fetch")
     b.add_argument("--start", required=True)

@@ -1,19 +1,25 @@
 # Render Blueprint. Secrets are set in the Render dashboard (sync: false), never here.
+# One service: the frontend is built into frontend/dist and served by FastAPI at /,
+# so the app and API share one URL (no CORS needed). No rootDir: files outside a
+# root directory are not available on Render, and the build needs frontend/.
 services:
   - type: web
-    name: spotwise-api
+    name: spotwise
     runtime: python
-    rootDir: backend
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn spotwise.main:app --host 0.0.0.0 --port $PORT
+    branch: main
+    buildCommand: >-
+      node -v && npm -v &&
+      pip install -r backend/requirements.txt &&
+      npm ci --prefix frontend && npm run build --prefix frontend
+    startCommand: cd backend && uvicorn spotwise.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.11
-      - key: DATABASE_URL          # Neon connection string, ?sslmode=require
-        sync: false
-      - key: SPOTWISE_CORS_ORIGINS # comma-separated frontend origins
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL          # Neon connection string, in single quotes locally; plain here
         sync: false
       - key: SPOTWISE_LLM_URL      # optional; app works without a model
         sync: false

@@ -1,0 +1,134 @@
+{
+  // Debug configs for SpotWise. Needs the "Python Debugger" (debugpy) extension.
+  // Run ./run.sh once first so backend/.venv exists (and frontend/dist for the UI on :8000).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: API (local data)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      // No --reload: the reloader runs the app in a child process and breakpoints won't hit.
+      "args": ["spotwise.main:app", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      // Empty DATABASE_URL forces backend/data/ (prices.json, else synthetic sample).
+      "env": { "DATABASE_URL": "" },
+      "justMyCode": true
+    },
+    {
+      "name": "Backend: API (Neon via .env)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["spotwise.main:app", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      // Put DATABASE_URL=... in the git-ignored .env at the repo root.
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "Backend: tests (all)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "justMyCode": false
+    },
+    {
+      "name": "Backend: tests (current file)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "${file}"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "justMyCode": false
+    },
+    {
+      "name": "Script: upload to Neon",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/scripts/upload_neon.py",
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    // fetch_metals.py: probe/fetch spend real metals.dev calls (Free plan: 100/month).
+    // Key comes from METALS_DEV_API_KEY in the repo-root .env.
+    {
+      "name": "Script: fetch probe (1 API call)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/scripts/fetch_metals.py",
+      "args": ["probe"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Script: fetch history (API calls)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/scripts/fetch_metals.py",
+      "args": [
+        "fetch",
+        "--start", "${input:fetchStart}",
+        "--end", "${input:fetchEnd}",
+        "--chunk-days", "30",
+        "--max-calls", "${input:fetchMaxCalls}",
+        "--currencies", "INR,USD,EUR,GBP,AED"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      // Re-parses saved chunks in data/raw/ into prices.json. No API calls:
+      // use this to debug parse_chunk() and validation for free.
+      "name": "Script: fetch merge (no API calls)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/scripts/fetch_metals.py",
+      "args": ["merge", "--currencies", "INR,USD,EUR,GBP,AED"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Frontend: Vite dev server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/frontend"
+    },
+    {
+      "name": "Frontend: Chrome (:5173)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack (API + Vite)",
+      "configurations": ["Backend: API (local data)", "Frontend: Vite dev server"],
+      "stopAll": true
+    }
+  ],
+  "inputs": [
+    { "id": "fetchStart", "type": "promptString", "description": "Start date (YYYY-MM-DD)", "default": "2021-10-18" },
+    { "id": "fetchEnd", "type": "promptString", "description": "End date (YYYY-MM-DD)", "default": "2026-10-16" },
+    { "id": "fetchMaxCalls", "type": "promptString", "description": "Stop after this many total API calls", "default": "60" }
+  ]
+}
