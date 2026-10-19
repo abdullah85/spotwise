@@ -133,6 +133,7 @@ Commits made after the deadline (19 Oct 2026, after the entry was submitted):
 
 - Optional `SPOTWISE_LLM_API_KEY` for hosted model servers, and model instructions sent in the user
   message so Gemma works. The submitted entry ran without a model on the public demo.
+- Log the reason (never the key) when a model call falls back to rules or the template.
 
 ## Licence
 

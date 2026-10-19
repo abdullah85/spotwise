@@ -1,5 +1,7 @@
 from datetime import date
 
+import httpx
+
 from spotwise import ai
 from spotwise.ai import auth_headers, build_facts, explain, numbers_ok, rule_parse, template_text
 from spotwise.backtest import BacktestParams, run_backtest
@@ -89,3 +91,11 @@ def test_hosted_model_explanation_still_number_checked(monkeypatch):
     _fake_model(monkeypatch, "You would have made 99.9% more.")  # invented number
     text, src = explain(facts)
     assert src == "template" and "Backtest of gold" in text
+
+
+def test_describe_error_reports_status_and_body():
+    req = httpx.Request("POST", "https://llm.example/v1/chat/completions")
+    resp = httpx.Response(400, text='{"error": "JSON mode is not enabled for this model"}', request=req)
+    err = httpx.HTTPStatusError("bad", request=req, response=resp)
+    assert ai.describe_error(err) == 'HTTP 400: {"error": "JSON mode is not enabled for this model"}'
+    assert ai.describe_error(ValueError("nope")) == "ValueError: nope"

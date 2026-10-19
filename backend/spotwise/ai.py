@@ -16,6 +16,7 @@ Instructions go in the user message, not a system message: some models
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import date, timedelta
@@ -27,6 +28,8 @@ from .backtest import BacktestParams
 LLM_URL = os.environ.get("SPOTWISE_LLM_URL", "").rstrip("/")
 LLM_MODEL = os.environ.get("SPOTWISE_LLM_MODEL", "")
 LLM_API_KEY = os.environ.get("SPOTWISE_LLM_API_KEY", "")
+
+log = logging.getLogger("spotwise.ai")
 
 CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "AUD", "BRL", "CAD", "CHF", "CNY", "HKD", "JPY", "SGD"]
 
@@ -41,6 +44,14 @@ def auth_headers(api_key: str) -> dict:
 def user_messages(instructions: str, content: str) -> list[dict]:
     """One user message carrying the instructions, so models without a system role work."""
     return [{"role": "user", "content": f"{instructions}\n\n{content}"}]
+
+
+def describe_error(e: Exception) -> str:
+    """Short reason for a failed model call, for the logs. Never includes the API key
+    (it is only ever sent in a header, and headers are not logged)."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return f"HTTP {e.response.status_code}: {e.response.text[:300]}"
+    return f"{type(e).__name__}: {str(e)[:300]}"
 
 
 # ---------- 1. text -> structured request ----------
@@ -109,7 +120,8 @@ def llm_parse(text: str, last_date: date) -> BacktestParams | None:
         r.raise_for_status()
         raw = json.loads(r.json()["choices"][0]["message"]["content"])
         return BacktestParams(**raw)  # pydantic enforces bounds: never trust the model
-    except Exception:
+    except Exception as e:
+        log.warning("model parse failed, using rules: %s", describe_error(e))
         return None
 
 
@@ -207,7 +219,8 @@ def llm_explain(facts: dict) -> str | None:
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
-    except Exception:
+    except Exception as e:
+        log.warning("model explain failed, using template: %s", describe_error(e))
         return None
 
 
@@ -216,4 +229,6 @@ def explain(facts: dict) -> tuple[str, str]:
     text = llm_explain(facts)
     if text and numbers_ok(text, facts):
         return text, "model"
+    if text:
+        log.warning("model explanation had numbers not in the facts, using template")
     return template_text(facts), "template"
