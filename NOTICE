@@ -1,0 +1,7 @@
+SpotWise uses TradingView Lightweight Charts, licensed under the Apache License 2.0.
+https://github.com/tradingview/lightweight-charts
+
+As that project requires, the chart displays the TradingView attribution logo and this
+notice is kept with the distribution. Do not remove the attribution from the chart.
+
+Prices by metals.dev. Price data is displayed in-app only and is not part of this repository.

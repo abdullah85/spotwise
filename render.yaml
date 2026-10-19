@@ -1,0 +1,21 @@
+# Render Blueprint. Secrets are set in the Render dashboard (sync: false), never here.
+services:
+  - type: web
+    name: spotwise-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn spotwise.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: DATABASE_URL          # Neon connection string, ?sslmode=require
+        sync: false
+      - key: SPOTWISE_CORS_ORIGINS # comma-separated frontend origins
+        sync: false
+      - key: SPOTWISE_LLM_URL      # optional; app works without a model
+        sync: false
+      - key: SPOTWISE_LLM_MODEL
+        sync: false

@@ -1,0 +1,14 @@
+.env
+*~
+__pycache__/
+*.pyc
+.venv/
+.env
+node_modules/
+dist/
+.pytest_cache/
+
+# Licensing: metals.dev data may not be redistributed. Never commit data or keys.
+backend/data/*
+!backend/data/.gitkeep
+*.key
